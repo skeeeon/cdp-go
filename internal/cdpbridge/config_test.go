@@ -152,6 +152,7 @@ func clearEnv(t *testing.T) {
 	for _, k := range []string{
 		"CDP_GROUP", "CDP_PORT", "CDP_INTERFACE", "CDP_NATS_PREFIX",
 		"LOG_LEVEL", "CONFIG_FILE",
+		"GEOFENCE_PREFIX", "GEOFENCE_HYSTERESIS",
 		"NATS_URL", "NATS_NAME", "NATS_USER", "NATS_PASSWORD", "NATS_TOKEN",
 		"NATS_CREDS_FILE", "NATS_NKEY_SEED_FILE",
 		"NATS_TLS_CA", "NATS_TLS_CERT", "NATS_TLS_KEY", "NATS_TLS_INSECURE",
@@ -163,5 +164,84 @@ func clearEnv(t *testing.T) {
 			t.Setenv(k, "")
 			os.Unsetenv(k)
 		}
+	}
+}
+
+func TestLoadConfigGeofenceDefaultsDisabled(t *testing.T) {
+	clearEnv(t)
+	cfg, err := LoadConfig(nil)
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.Geofence.Enabled() {
+		t.Error("geofence should be disabled by default (no zones configured)")
+	}
+	if cfg.Geofence.Prefix != "geofence" {
+		t.Errorf("geofence.prefix default: %q", cfg.Geofence.Prefix)
+	}
+	if cfg.Geofence.Hysteresis != 5 {
+		t.Errorf("geofence.hysteresis default: %d", cfg.Geofence.Hysteresis)
+	}
+}
+
+func TestLoadConfigGeofenceFromYAML(t *testing.T) {
+	clearEnv(t)
+	path := writeYAML(t, `
+geofence:
+  hysteresis: 7
+  prefix: gf
+  zones:
+    - name: Paper
+      vertices: [[0, 0], [1000, 0], [1000, 1000], [0, 1000]]
+      rgb: [255, 255, 0]
+    - name: Shipping
+      vertices: [[2000, 0], [3000, 0], [2500, 1000]]
+      rgb: [0, 0, 255]
+`)
+	cfg, err := LoadConfig([]string{"--config", path})
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if !cfg.Geofence.Enabled() {
+		t.Fatal("expected geofence enabled")
+	}
+	if cfg.Geofence.Hysteresis != 7 {
+		t.Errorf("hysteresis: got %d, want 7", cfg.Geofence.Hysteresis)
+	}
+	if cfg.Geofence.Prefix != "gf" {
+		t.Errorf("prefix: got %q, want gf", cfg.Geofence.Prefix)
+	}
+	if len(cfg.Geofence.Zones) != 2 {
+		t.Fatalf("zones: got %d, want 2", len(cfg.Geofence.Zones))
+	}
+	zones, err := cfg.Geofence.Build()
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if zones[0].Name != "Paper" || zones[1].Name != "Shipping" {
+		t.Errorf("zone names: got %q, %q", zones[0].Name, zones[1].Name)
+	}
+}
+
+func TestLoadConfigGeofenceFlagsOverride(t *testing.T) {
+	clearEnv(t)
+	path := writeYAML(t, `
+geofence:
+  hysteresis: 7
+  prefix: yamlpfx
+`)
+	cfg, err := LoadConfig([]string{
+		"--config", path,
+		"--geofence-prefix", "flagpfx",
+		"--geofence-hysteresis", "10",
+	})
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.Geofence.Prefix != "flagpfx" {
+		t.Errorf("prefix: got %q, want flagpfx", cfg.Geofence.Prefix)
+	}
+	if cfg.Geofence.Hysteresis != 10 {
+		t.Errorf("hysteresis: got %d, want 10", cfg.Geofence.Hysteresis)
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/velociti/cdp-go/internal/config"
+	"github.com/velociti/cdp-go/internal/geofence"
 )
 
 // Config is the cdp-nats-bridge binary's full configuration.
@@ -24,6 +25,11 @@ type Config struct {
 
 	Logger config.Logger `yaml:"logger"`
 	Broker config.Broker `yaml:"broker"`
+
+	// Geofence is optional. An empty Zones list disables the feature
+	// entirely; the engine isn't constructed and no geofence code runs
+	// in the per-packet path.
+	Geofence geofence.Config `yaml:"geofence"`
 }
 
 // defaults seeds a Config with the same values flags would otherwise use.
@@ -44,6 +50,10 @@ func defaults() *Config {
 			MaxPingsOut:     2,
 			DrainTimeout:    30 * time.Second,
 			FlushTimeout:    5 * time.Second,
+		},
+		Geofence: geofence.Config{
+			Hysteresis: 5,
+			Prefix:     "geofence",
 		},
 	}
 }
@@ -82,6 +92,11 @@ func LoadConfig(args []string) (*Config, error) {
 
 	// Logger
 	fs.StringVar(&cfg.Logger.Level, "log-level", cfg.Logger.Level, "log level: debug|info|warn|error")
+
+	// Geofence (zones are YAML-only; only knobs that have a sensible
+	// scalar form are exposed via env/flags)
+	fs.StringVar(&cfg.Geofence.Prefix, "geofence-prefix", cfg.Geofence.Prefix, "NATS subject prefix for geofence events")
+	fs.IntVar(&cfg.Geofence.Hysteresis, "geofence-hysteresis", cfg.Geofence.Hysteresis, "geofence: consecutive packets a new zone state must hold before commit")
 
 	// Broker
 	fs.StringVar(&cfg.Broker.URL, "nats-url", cfg.Broker.URL, "NATS server URL(s); comma-separated")
@@ -137,6 +152,9 @@ func applyEnv(cfg *Config) {
 	envStr(&cfg.Prefix, "CDP_NATS_PREFIX")
 
 	envStr(&cfg.Logger.Level, "LOG_LEVEL")
+
+	envStr(&cfg.Geofence.Prefix, "GEOFENCE_PREFIX")
+	envInt(&cfg.Geofence.Hysteresis, "GEOFENCE_HYSTERESIS")
 
 	envStr(&cfg.Broker.URL, "NATS_URL")
 	envStr(&cfg.Broker.Name, "NATS_NAME")

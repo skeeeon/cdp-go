@@ -2,9 +2,11 @@
 
 Go port of the Ciholas Data Protocol (CDP) parser, plus a small bridge binary
 that listens for CDP UDP multicast traffic, decodes each packet, and publishes
-the decoded data items as JSON onto NATS.
+the decoded data items as JSON onto NATS. An optional 2D polygon geofencing
+feature emits zone enter/exit events for each tag's `PositionV3` updates.
 
-The reference Python implementation is [`cdp-py`](../cdp-py).
+The reference Python implementations are [`cdp-py`](../cdp-py) (parser) and
+[`cdp-geofencing`](../cdp-geofencing) (geofencing).
 
 ## Layout
 
@@ -14,6 +16,7 @@ internal/
   config/                      # shared config types (Broker, Logger) + YAML loader
   broker/                      # NATS connect helper (consumes config.Broker)
   logger/                      # slog setup (consumes config.Logger)
+  geofence/                    # 2D polygon engine: zones, hysteresis, events
   cdpbridge/                   # binary-specific: config+listener+publish+run
 cmd/
   cdp-nats-bridge/             # tiny entry point
@@ -21,8 +24,8 @@ configs/                       # example.yaml (config file)
 ```
 
 The `internal/config`, `internal/broker`, and `internal/logger` packages are
-shared infrastructure — when a second NATS-publishing binary is added (e.g. a
-geofence source), it lives in its own `internal/<name>/` and reuses these.
+shared infrastructure. `internal/geofence` is pure logic (no NATS coupling) —
+the bridge wires it to NATS via a small sink in `internal/cdpbridge/`.
 
 ## Supported data items
 
@@ -120,6 +123,94 @@ Each NATS message body is a JSON object:
 consumer can disambiguate items whose subject token has the version
 suffix stripped.
 
+## Geofencing (optional)
+
+When a `geofence:` block is present in the YAML config, every `PositionV3`
+the bridge sees is also tested against a list of 2D polygon zones. Committed
+zone-membership transitions are published as JSON events on a parallel NATS
+subject tree. With no `geofence:` block (or an empty `zones:` list), the
+feature is disabled and the bridge runs identically to a build without it.
+
+Coordinates are int32 millimeters — the same units `PositionV3` uses on the
+wire. (Deliberate divergence from the Python implementation, which used
+floats. Integer mm eliminates float-comparison foot-guns.)
+
+Zones are 2D polygons defined by ≥3 vertices. The polygon is implicitly
+closed (last vertex connects to first). Vertex order is irrelevant
+(orientation-agnostic).
+
+```yaml
+geofence:
+  hysteresis: 5    # consecutive packets a new zone state must hold before commit; 0|1 = immediate
+  prefix: geofence
+  zones:
+    - name: Paper
+      vertices: [[0, 0], [10000, 0], [10000, 10000], [0, 10000]]
+      rgb: [255, 255, 0]
+    - name: Loading Dock
+      vertices: [[20000, 0], [30000, 0], [25000, 10000]]
+      rgb: [0, 0, 255]
+```
+
+### Hysteresis
+
+`hysteresis: N` means "a proposed new zone-membership state must hold for N
+consecutive `PositionV3` packets from the same tag before it is committed."
+A tag oscillating between two zones every packet never commits — the
+proposed state has to be *stable*, not just different. `hysteresis: 0` and
+`hysteresis: 1` both commit immediately on any observed change.
+
+### NATS subjects
+
+```
+<prefix>.tag.<event_type>.<tag_serial_hex8>.<zone_slug>
+```
+
+- `prefix` defaults to `geofence` (override via `--geofence-prefix` / `GEOFENCE_PREFIX`)
+- `event_type` is `enter` or `exit`
+- `tag_serial_hex8` matches the bridge's tag rendering (8 lowercase hex, no colons)
+- `zone_slug` is the lowercased zone name with NATS-illegal characters
+  (`.`, `>`, `*`, whitespace) replaced by underscores
+
+Useful wildcards:
+
+```
+geofence.tag.>                       # all geofence events
+geofence.tag.enter.>                 # all enters
+geofence.tag.*.*.paper               # all transitions touching the "paper" zone
+geofence.tag.*.01020304.>            # all transitions for one tag
+```
+
+### Geofence event JSON
+
+```json
+{
+  "type": "enter",
+  "tag": "01:02:0304",
+  "zone": "Paper",
+  "in_zones": ["Paper"],
+  "network_time": 12345678901234,
+  "position": {"x": 500, "y": 700},
+  "color": {"r": 255, "g": 255, "b": 0}
+}
+```
+
+`in_zones` is the full committed zone set *after* the transition (sorted
+alphabetically), so a downstream consumer never has to maintain its own
+state to answer "where is this tag now". When a tag enters or exits multiple
+zones simultaneously (overlapping zones, or jumping across non-adjacent
+ones), one event is emitted per zone touched, with exits ordered before
+enters.
+
+### Geofence flags
+
+| Flag | Env | Default | Purpose |
+|---|---|---|---|
+| `--geofence-prefix` | `GEOFENCE_PREFIX` | `geofence` | NATS subject prefix |
+| `--geofence-hysteresis` | `GEOFENCE_HYSTERESIS` | `5` | Consecutive-packet count |
+
+Zones are YAML-only (lists don't have a sensible flag form).
+
 ## Configuration
 
 Resolved in priority order (lowest to highest):
@@ -172,9 +263,10 @@ Unknown YAML keys are an error (catches typos early).
 go test ./...
 ```
 
-Watch the live feed:
+Watch the live feeds:
 ```bash
-nats sub "cdp.>"
+nats sub "cdp.>"           # decoded data items
+nats sub "geofence.tag.>"  # zone enter/exit events (when geofencing is enabled)
 ```
 
 ## License

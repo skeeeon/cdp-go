@@ -40,3 +40,27 @@ broker:
   drain_timeout: 30s
   flush_timeout: 5s
   no_echo: false
+
+# Optional: 2D polygon geofencing on PositionV3 packets. If `zones` is
+# empty (or this whole block is absent), the feature is disabled and the
+# bridge runs exactly as it did before geofencing was added.
+#
+# Vertex coordinates are int32 millimeters — the same units PositionV3
+# uses on the wire. (The Python implementation used floats; this port
+# standardizes on integer mm to eliminate float-comparison foot-guns.)
+#
+# Output: one NATS message per zone enter/exit on subject
+#   <prefix>.tag.<enter|exit>.<tag_serial_hex8>.<zone_slug>
+# where zone_slug is the lowercased name with NATS-illegal characters
+# (`.`, `>`, `*`, whitespace) replaced by underscores.
+#
+# geofence:
+#   hysteresis: 5    # consecutive packets a new zone state must hold before commit; 0|1 = immediate
+#   prefix: geofence
+#   zones:
+#     - name: Paper
+#       vertices: [[0, 0], [10000, 0], [10000, 10000], [0, 10000]]
+#       rgb: [255, 255, 0]
+#     - name: Loading Dock
+#       vertices: [[20000, 0], [30000, 0], [25000, 10000]]
+#       rgb: [0, 0, 255]

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/nats-io/nats.go"
+	"github.com/velociti/cdp-go/internal/geofence"
 	"github.com/velociti/cdp-go/pkg/cdp"
 )
 
@@ -23,10 +24,12 @@ type envelopePacket struct {
 }
 
 // publish decodes one CDP datagram and emits one NATS message per data item.
+// When engine is non-nil, each PositionV3 item is also fed to the geofence
+// engine after publication.
 //
 // Decode errors are returned (per-datagram failure); per-item publish errors
 // are logged but do not abort the rest of the items in the same datagram.
-func publish(nc *nats.Conn, prefix string, data []byte) error {
+func publish(nc *nats.Conn, prefix string, data []byte, engine *geofence.Engine) error {
 	pkt, err := cdp.Decode(data)
 	if err != nil {
 		return fmt.Errorf("decode: %w", err)
@@ -49,6 +52,12 @@ func publish(nc *nats.Conn, prefix string, data []byte) error {
 		}
 		if err := nc.Publish(subj, body); err != nil {
 			slog.Warn("publish", "subject", subj, "err", err)
+		}
+
+		if engine != nil {
+			if pos, ok := it.Payload.(*cdp.PositionV3); ok {
+				engine.OnPosition(pkt.Sender, pos)
+			}
 		}
 	}
 	return nil

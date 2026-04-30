@@ -5,9 +5,11 @@ package cdpbridge
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 
 	"github.com/velociti/cdp-go/internal/broker"
+	"github.com/velociti/cdp-go/internal/geofence"
 )
 
 // Run is the bridge orchestrator. It dials NATS, listens on the multicast
@@ -26,6 +28,20 @@ func Run(ctx context.Context, cfg *Config) error {
 		}
 	}()
 
+	var engine *geofence.Engine
+	if cfg.Geofence.Enabled() {
+		zones, err := cfg.Geofence.Build()
+		if err != nil {
+			return fmt.Errorf("geofence: %w", err)
+		}
+		engine = geofence.NewEngine(zones, cfg.Geofence.Hysteresis,
+			&natsGeofenceSink{nc: nc, prefix: cfg.Geofence.Prefix})
+		slog.Info("geofence enabled",
+			"zones", len(zones),
+			"hysteresis", cfg.Geofence.Hysteresis,
+			"prefix", cfg.Geofence.Prefix)
+	}
+
 	packets := make(chan []byte, 256)
 	listenErr := make(chan error, 1)
 	go func() { listenErr <- listen(ctx, cfg, packets) }()
@@ -37,7 +53,7 @@ func Run(ctx context.Context, cfg *Config) error {
 		case err := <-listenErr:
 			return err
 		case data := <-packets:
-			if err := publish(nc, cfg.Prefix, data); err != nil {
+			if err := publish(nc, cfg.Prefix, data, engine); err != nil {
 				slog.Warn("publish_packet", "err", err)
 			}
 		}
