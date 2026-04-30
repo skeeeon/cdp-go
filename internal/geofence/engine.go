@@ -3,6 +3,7 @@ package geofence
 import (
 	"log/slog"
 	"sort"
+	"time"
 
 	"github.com/velociti/cdp-go/pkg/cdp"
 )
@@ -25,6 +26,11 @@ func (z ZoneSet) Equal(other ZoneSet) bool {
 	return true
 }
 
+// defaultCleanupEvery: amortize the prune scan over ~10k OnPosition
+// calls. At realistic rates (≈100 Hz × 100 tags = 10k packets/sec) that's
+// roughly one prune per second; the scan over the tag map is microseconds.
+const defaultCleanupEvery = 10000
+
 // Engine is the geofence brain. It owns the static zone list and per-tag
 // hysteresis state, and emits commit events through a sink.
 //
@@ -36,28 +42,50 @@ type Engine struct {
 	hysteresis int
 	sink       EventSink
 	tags       map[cdp.Serial]*tagState
+
+	// Stale-tag cleanup. tagTTL == 0 disables the sweep; otherwise tags
+	// whose last position was longer ago than tagTTL are removed every
+	// cleanupEvery OnPosition calls.
+	tagTTL         time.Duration
+	cleanupCounter int
+	cleanupEvery   int
+	now            func() time.Time
 }
 
 type tagState struct {
 	committed    ZoneSet
 	pending      ZoneSet
 	pendingCount int
+	lastSeen     time.Time
 }
 
-// NewEngine constructs an Engine with the given zones, hysteresis count,
-// and event sink. hysteresis < 1 is treated as 1 (commit immediately on
-// the first observed change).
-func NewEngine(zones []*Zone, hysteresis int, sink EventSink) *Engine {
+// NewEngine constructs an Engine.
+//
+// hysteresis < 1 is treated as 1 (commit immediately on the first
+// observed change).
+//
+// tagTTL: how long a tag may go without a position update before it is
+// dropped from the per-tag state map. Zero disables the sweep. Use
+// wall-clock duration here (not CDP NetworkTime) — NetworkTime is a UWB
+// sync clock that resets on tag reboot.
+func NewEngine(zones []*Zone, hysteresis int, tagTTL time.Duration, sink EventSink) *Engine {
 	if hysteresis < 1 {
 		hysteresis = 1
 	}
 	return &Engine{
-		zones:      zones,
-		hysteresis: hysteresis,
-		sink:       sink,
-		tags:       make(map[cdp.Serial]*tagState),
+		zones:        zones,
+		hysteresis:   hysteresis,
+		sink:         sink,
+		tags:         make(map[cdp.Serial]*tagState),
+		tagTTL:       tagTTL,
+		cleanupEvery: defaultCleanupEvery,
+		now:          time.Now,
 	}
 }
+
+// TagCount returns the number of tags currently tracked. Useful for
+// operational metrics and tests of the cleanup sweep.
+func (e *Engine) TagCount() int { return len(e.tags) }
 
 // OnPosition processes one position update from one tag. Returns true if
 // a state transition was committed (and at least one event emitted).
@@ -65,18 +93,20 @@ func (e *Engine) OnPosition(serial cdp.Serial, pos *cdp.PositionV3) bool {
 	p := Point{X: pos.X, Y: pos.Y}
 	proposed := e.contains(p)
 
+	now := e.now()
 	st, ok := e.tags[serial]
 	if !ok {
 		st = &tagState{}
 		e.tags[serial] = st
 	}
+	st.lastSeen = now
 
+	committed := false
 	switch {
 	case proposed.Equal(st.committed):
 		// Settled state. Drop any pending.
 		st.pending = nil
 		st.pendingCount = 0
-		return false
 	case st.pending == nil || !proposed.Equal(st.pending):
 		// New candidate; restart the count.
 		st.pending = proposed
@@ -85,16 +115,35 @@ func (e *Engine) OnPosition(serial cdp.Serial, pos *cdp.PositionV3) bool {
 		st.pendingCount++
 	}
 
-	if st.pendingCount < e.hysteresis {
-		return false
+	if st.pendingCount >= e.hysteresis {
+		e.emit(serial, pos, st.committed, proposed)
+		st.committed = proposed
+		st.pending = nil
+		st.pendingCount = 0
+		committed = true
 	}
 
-	// Commit.
-	e.emit(serial, pos, st.committed, proposed)
-	st.committed = proposed
-	st.pending = nil
-	st.pendingCount = 0
-	return true
+	e.cleanupCounter++
+	if e.tagTTL > 0 && e.cleanupCounter >= e.cleanupEvery {
+		e.cleanupCounter = 0
+		e.pruneStale(now)
+	}
+
+	return committed
+}
+
+// pruneStale removes tags whose lastSeen is older than tagTTL. Skips
+// entries with lastSeen in the future relative to now (clock went
+// backwards, e.g. injected fake clock or system clock adjustment).
+func (e *Engine) pruneStale(now time.Time) {
+	for serial, st := range e.tags {
+		if st.lastSeen.After(now) {
+			continue
+		}
+		if now.Sub(st.lastSeen) > e.tagTTL {
+			delete(e.tags, serial)
+		}
+	}
 }
 
 // contains returns the sorted set of zones that contain p.

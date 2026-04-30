@@ -27,25 +27,24 @@ import (
 // drive YAML decoding; binaries map env vars and flags onto these fields
 // in their own loader.
 type Broker struct {
-	URL              string        `yaml:"url"`
-	Name             string        `yaml:"name"`
-	User             string        `yaml:"user"`
-	Password         string        `yaml:"password"`
-	Token            string        `yaml:"token"`
-	CredsFile        string        `yaml:"creds_file"`
-	NkeySeedFile     string        `yaml:"nkey_seed_file"`
-	TLSCA            string        `yaml:"tls_ca"`
-	TLSCert          string        `yaml:"tls_cert"`
-	TLSKey           string        `yaml:"tls_key"`
-	TLSInsecure      bool          `yaml:"tls_insecure"`
-	MaxReconnects    int           `yaml:"max_reconnects"`
-	ReconnectWait    time.Duration `yaml:"reconnect_wait"`
-	ReconnectJitter  time.Duration `yaml:"reconnect_jitter"`
-	PingInterval     time.Duration `yaml:"ping_interval"`
-	MaxPingsOut      int           `yaml:"max_pings_out"`
-	DrainTimeout     time.Duration `yaml:"drain_timeout"`
-	FlushTimeout     time.Duration `yaml:"flush_timeout"`
-	NoEcho           bool          `yaml:"no_echo"`
+	URL             string        `yaml:"url"`
+	Name            string        `yaml:"name"`
+	User            string        `yaml:"user"`
+	Password        string        `yaml:"password"`
+	Token           string        `yaml:"token"`
+	CredsFile       string        `yaml:"creds_file"`
+	NkeySeedFile    string        `yaml:"nkey_seed_file"`
+	TLSCA           string        `yaml:"tls_ca"`
+	TLSCert         string        `yaml:"tls_cert"`
+	TLSKey          string        `yaml:"tls_key"`
+	TLSInsecure     bool          `yaml:"tls_insecure"`
+	MaxReconnects   int           `yaml:"max_reconnects"`
+	ReconnectWait   time.Duration `yaml:"reconnect_wait"`
+	ReconnectJitter time.Duration `yaml:"reconnect_jitter"`
+	PingInterval    time.Duration `yaml:"ping_interval"`
+	MaxPingsOut     int           `yaml:"max_pings_out"`
+	FlushTimeout    time.Duration `yaml:"flush_timeout"`
+	NoEcho          bool          `yaml:"no_echo"`
 }
 
 // Logger holds slog setup knobs.

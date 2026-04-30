@@ -25,7 +25,6 @@ func Connect(cfg config.Broker) (*nats.Conn, error) {
 		nats.ReconnectJitter(cfg.ReconnectJitter, cfg.ReconnectJitter),
 		nats.PingInterval(cfg.PingInterval),
 		nats.MaxPingsOutstanding(cfg.MaxPingsOut),
-		nats.DrainTimeout(cfg.DrainTimeout),
 		nats.FlusherTimeout(cfg.FlushTimeout),
 		nats.DisconnectErrHandler(func(_ *nats.Conn, err error) {
 			slog.Warn("nats disconnected", "err", err)

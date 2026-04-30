@@ -3,6 +3,7 @@ package geofence
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/velociti/cdp-go/pkg/cdp"
 )
@@ -76,7 +77,7 @@ func pos(x, y int32) *cdp.PositionV3 {
 
 func TestEngineHysteresisN1CommitsImmediately(t *testing.T) {
 	sink := &recordingSink{}
-	e := NewEngine(twoSquares(t), 1, sink)
+	e := NewEngine(twoSquares(t), 1, 0, sink)
 	tag := cdp.Serial(0xAABBCCDD)
 
 	e.OnPosition(tag, pos(5, 5)) // inside A
@@ -90,7 +91,7 @@ func TestEngineHysteresisN1CommitsImmediately(t *testing.T) {
 
 func TestEngineHysteresisN0BehavesLikeN1(t *testing.T) {
 	sink := &recordingSink{}
-	e := NewEngine(twoSquares(t), 0, sink)
+	e := NewEngine(twoSquares(t), 0, 0, sink)
 	tag := cdp.Serial(0xAABBCCDD)
 
 	e.OnPosition(tag, pos(5, 5))
@@ -101,7 +102,7 @@ func TestEngineHysteresisN0BehavesLikeN1(t *testing.T) {
 
 func TestEngineHysteresisN5StableCommit(t *testing.T) {
 	sink := &recordingSink{}
-	e := NewEngine(twoSquares(t), 5, sink)
+	e := NewEngine(twoSquares(t), 5, 0, sink)
 	tag := cdp.Serial(1)
 
 	for i := 0; i < 4; i++ {
@@ -118,7 +119,7 @@ func TestEngineHysteresisN5StableCommit(t *testing.T) {
 
 func TestEngineHysteresisPrematureSwitchResets(t *testing.T) {
 	sink := &recordingSink{}
-	e := NewEngine(twoSquares(t), 5, sink)
+	e := NewEngine(twoSquares(t), 5, 0, sink)
 	tag := cdp.Serial(1)
 
 	// Three packets in A.
@@ -138,7 +139,7 @@ func TestEngineHysteresisPrematureSwitchResets(t *testing.T) {
 
 func TestEngineHysteresisOscillationNeverCommits(t *testing.T) {
 	sink := &recordingSink{}
-	e := NewEngine(twoSquares(t), 3, sink)
+	e := NewEngine(twoSquares(t), 3, 0, sink)
 	tag := cdp.Serial(1)
 
 	// A, B, A, B, A, B alternating — pending always becomes the new
@@ -157,7 +158,7 @@ func TestEngineHysteresisOscillationNeverCommits(t *testing.T) {
 
 func TestEngineMultiZoneOverlap(t *testing.T) {
 	sink := &recordingSink{}
-	e := NewEngine(overlappingSquares(t), 1, sink)
+	e := NewEngine(overlappingSquares(t), 1, 0, sink)
 	tag := cdp.Serial(1)
 
 	e.OnPosition(tag, pos(7, 5)) // in both A and B (A=[0,10], B=[5,15])
@@ -183,7 +184,7 @@ func TestEngineMultiZoneOverlap(t *testing.T) {
 
 func TestEngineExitThenReEnter(t *testing.T) {
 	sink := &recordingSink{}
-	e := NewEngine(twoSquares(t), 1, sink)
+	e := NewEngine(twoSquares(t), 1, 0, sink)
 	tag := cdp.Serial(1)
 
 	e.OnPosition(tag, pos(5, 5))   // enter A
@@ -197,7 +198,7 @@ func TestEngineExitThenReEnter(t *testing.T) {
 
 func TestEngineSubsetTransitionExitOnly(t *testing.T) {
 	sink := &recordingSink{}
-	e := NewEngine(overlappingSquares(t), 1, sink)
+	e := NewEngine(overlappingSquares(t), 1, 0, sink)
 	tag := cdp.Serial(1)
 
 	e.OnPosition(tag, pos(7, 5)) // commits enter A and enter B
@@ -218,7 +219,7 @@ func TestEngineSubsetTransitionExitOnly(t *testing.T) {
 func TestEngineExitOrderBeforeEnter(t *testing.T) {
 	// Committed [A] -> proposed [B]: must emit exit A *then* enter B.
 	sink := &recordingSink{}
-	e := NewEngine(twoSquares(t), 1, sink)
+	e := NewEngine(twoSquares(t), 1, 0, sink)
 	tag := cdp.Serial(1)
 
 	e.OnPosition(tag, pos(5, 5))  // commit enter A
@@ -238,7 +239,7 @@ func TestEngineExitOrderBeforeEnter(t *testing.T) {
 
 func TestEngineTagsAreIndependent(t *testing.T) {
 	sink := &recordingSink{}
-	e := NewEngine(twoSquares(t), 3, sink)
+	e := NewEngine(twoSquares(t), 3, 0, sink)
 	stable := cdp.Serial(1)
 	osc := cdp.Serial(2)
 
@@ -269,7 +270,7 @@ func TestEngineTagsAreIndependent(t *testing.T) {
 
 func TestEngineEventCarriesPositionAndColor(t *testing.T) {
 	sink := &recordingSink{}
-	e := NewEngine(twoSquares(t), 1, sink)
+	e := NewEngine(twoSquares(t), 1, 0, sink)
 	tag := cdp.Serial(0x01020304)
 
 	p := &cdp.PositionV3{X: 5, Y: 7, NetworkTime: 999}
@@ -293,5 +294,96 @@ func TestEngineEventCarriesPositionAndColor(t *testing.T) {
 	}
 	if ev.ZoneSlug != "a" {
 		t.Errorf("zone_slug: got %q, want a", ev.ZoneSlug)
+	}
+}
+
+// fakeClock returns whatever time the caller assigns to its current
+// field. Tests advance time by replacing current.
+type fakeClock struct{ current time.Time }
+
+func (c *fakeClock) Now() time.Time { return c.current }
+
+func TestEnginePrunesStaleTags(t *testing.T) {
+	sink := &recordingSink{}
+	clk := &fakeClock{current: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	e := NewEngine(twoSquares(t), 1, time.Hour, sink)
+	e.now = clk.Now
+	e.cleanupEvery = 1 // run sweep on every OnPosition for test brevity
+
+	// Tag #1 seen at t=0.
+	e.OnPosition(cdp.Serial(1), pos(5, 5))
+	if e.TagCount() != 1 {
+		t.Fatalf("expected 1 tag, got %d", e.TagCount())
+	}
+
+	// Advance 2 hours. Tag #2 packet arrives — should trigger sweep that
+	// removes the now-stale tag #1.
+	clk.current = clk.current.Add(2 * time.Hour)
+	e.OnPosition(cdp.Serial(2), pos(5, 5))
+	if e.TagCount() != 1 {
+		t.Errorf("expected 1 tag after sweep, got %d", e.TagCount())
+	}
+	// The remaining tag is #2.
+	if _, ok := e.tags[cdp.Serial(2)]; !ok {
+		t.Error("expected tag 2 to remain")
+	}
+	if _, ok := e.tags[cdp.Serial(1)]; ok {
+		t.Error("expected tag 1 to be pruned")
+	}
+}
+
+func TestEngineDoesNotPruneActiveTags(t *testing.T) {
+	sink := &recordingSink{}
+	clk := &fakeClock{current: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	e := NewEngine(twoSquares(t), 1, time.Hour, sink)
+	e.now = clk.Now
+	e.cleanupEvery = 1
+
+	e.OnPosition(cdp.Serial(1), pos(5, 5))
+
+	// Each minute, both tags get a packet. After 90 minutes, neither
+	// should have been swept (both seen within TTL of each other).
+	for i := 0; i < 90; i++ {
+		clk.current = clk.current.Add(time.Minute)
+		e.OnPosition(cdp.Serial(1), pos(5, 5))
+		e.OnPosition(cdp.Serial(2), pos(5, 5))
+	}
+	if e.TagCount() != 2 {
+		t.Errorf("expected 2 tags, got %d", e.TagCount())
+	}
+}
+
+func TestEngineTagTTLZeroDisablesCleanup(t *testing.T) {
+	sink := &recordingSink{}
+	clk := &fakeClock{current: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	e := NewEngine(twoSquares(t), 1, 0, sink) // TTL=0 disables sweep
+	e.now = clk.Now
+	e.cleanupEvery = 1
+
+	e.OnPosition(cdp.Serial(1), pos(5, 5))
+	clk.current = clk.current.Add(48 * time.Hour) // far past any reasonable TTL
+	e.OnPosition(cdp.Serial(2), pos(5, 5))
+
+	if e.TagCount() != 2 {
+		t.Errorf("TTL=0 must not prune; got %d tags", e.TagCount())
+	}
+}
+
+func TestEnginePruneSkipsClockGoingBackward(t *testing.T) {
+	sink := &recordingSink{}
+	clk := &fakeClock{current: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	e := NewEngine(twoSquares(t), 1, time.Hour, sink)
+	e.now = clk.Now
+	e.cleanupEvery = 1
+
+	// Tag seen "in the future".
+	e.OnPosition(cdp.Serial(1), pos(5, 5))
+
+	// Clock jumps backward (e.g. wall-clock NTP correction). Sweep
+	// should NOT delete the entry just because lastSeen.After(now).
+	clk.current = clk.current.Add(-24 * time.Hour)
+	e.OnPosition(cdp.Serial(2), pos(5, 5))
+	if e.TagCount() != 2 {
+		t.Errorf("expected sweep to skip future-stamped tag; got %d", e.TagCount())
 	}
 }

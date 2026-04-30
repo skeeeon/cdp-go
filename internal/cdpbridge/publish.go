@@ -51,7 +51,15 @@ func publish(nc *nats.Conn, prefix string, data []byte, engine *geofence.Engine)
 			continue
 		}
 		if err := nc.Publish(subj, body); err != nil {
-			slog.Warn("publish", "subject", subj, "err", err)
+			// Demote to debug when we already know NATS is down — the
+			// broker's DisconnectErrHandler/ReconnectHandler logs
+			// already carry the operational signal, so per-publish
+			// warns at thousands/sec just flood stderr.
+			if nc.Status() == nats.CONNECTED {
+				slog.Warn("publish", "subject", subj, "err", err)
+			} else {
+				slog.Debug("publish (disconnected)", "subject", subj, "err", err)
+			}
 		}
 
 		if engine != nil {

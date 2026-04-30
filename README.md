@@ -208,8 +208,13 @@ enters.
 |---|---|---|---|
 | `--geofence-prefix` | `GEOFENCE_PREFIX` | `geofence` | NATS subject prefix |
 | `--geofence-hysteresis` | `GEOFENCE_HYSTERESIS` | `5` | Consecutive-packet count |
+| `--geofence-tag-ttl` | `GEOFENCE_TAG_TTL` | `1h` | Drop per-tag state if no position update for this long; `0` disables |
 
 Zones are YAML-only (lists don't have a sensible flag form).
+
+`tag_ttl` is wall-clock time, **not** CDP NetworkTime. NetworkTime is a UWB
+sync clock that resets on tag reboot, so it's the wrong source for "I
+haven't seen this tag in a while" decisions.
 
 ## Configuration
 
@@ -231,7 +236,13 @@ Unknown YAML keys are an error (catches typos early).
 | `--port` | `CDP_PORT` | `7667` | UDP port |
 | `--iface` | `CDP_INTERFACE` | (auto) | Network interface name |
 | `--prefix` | `CDP_NATS_PREFIX` | `cdp` | NATS subject prefix |
+| `--udp-read-buffer` | `CDP_UDP_READ_BUFFER` | `1048576` (1 MiB) | UDP socket SO_RCVBUF size in bytes |
 | `--log-level` | `LOG_LEVEL` | `info` | `debug`/`info`/`warn`/`error` |
+
+**UDP buffer tuning:** if `netstat -su` shows `RcvbufErrors` climbing, raise
+`--udp-read-buffer`. Values above ~1 MiB usually require a sysctl bump
+(`sudo sysctl -w net.core.rmem_max=8388608`) — the kernel silently caps
+`SetReadBuffer` at `rmem_max`.
 
 ### NATS
 
@@ -253,8 +264,7 @@ Unknown YAML keys are an error (catches typos early).
 | `--nats-reconnect-jitter` | `NATS_RECONNECT_JITTER` | `100ms` | |
 | `--nats-ping-interval` | `NATS_PING_INTERVAL` | `2m` | |
 | `--nats-max-pings-out` | `NATS_MAX_PINGS_OUT` | `2` | |
-| `--nats-drain-timeout` | `NATS_DRAIN_TIMEOUT` | `30s` | |
-| `--nats-flush-timeout` | `NATS_FLUSH_TIMEOUT` | `5s` | |
+| `--nats-flush-timeout` | `NATS_FLUSH_TIMEOUT` | `5s` | Blocks shutdown until pending publishes flush, or this fires |
 | `--nats-no-echo` | `NATS_NO_ECHO` | `false` | Suppress own messages |
 
 ## Testing

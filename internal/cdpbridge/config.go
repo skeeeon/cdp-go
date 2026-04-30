@@ -18,10 +18,11 @@ import (
 // from internal/config so a future binary can share them.
 type Config struct {
 	// CDP listener
-	Group  string `yaml:"group"`
-	Port   int    `yaml:"port"`
-	Iface  string `yaml:"iface"`
-	Prefix string `yaml:"prefix"`
+	Group         string `yaml:"group"`
+	Port          int    `yaml:"port"`
+	Iface         string `yaml:"iface"`
+	Prefix        string `yaml:"prefix"`
+	UDPReadBuffer int    `yaml:"udp_read_buffer"` // bytes; raise on dense networks
 
 	Logger config.Logger `yaml:"logger"`
 	Broker config.Broker `yaml:"broker"`
@@ -36,10 +37,11 @@ type Config struct {
 // Splitting this out lets the YAML loader and the test suite share them.
 func defaults() *Config {
 	return &Config{
-		Group:  "239.255.76.67",
-		Port:   7667,
-		Prefix: "cdp",
-		Logger: config.Logger{Level: "info"},
+		Group:         "239.255.76.67",
+		Port:          7667,
+		Prefix:        "cdp",
+		UDPReadBuffer: 1 << 20, // 1 MiB; raise via --udp-read-buffer if drops show up in `netstat -su`
+		Logger:        config.Logger{Level: "info"},
 		Broker: config.Broker{
 			URL:             "nats://localhost:4222",
 			Name:            "cdp-nats-bridge",
@@ -48,12 +50,12 @@ func defaults() *Config {
 			ReconnectJitter: 100 * time.Millisecond,
 			PingInterval:    2 * time.Minute,
 			MaxPingsOut:     2,
-			DrainTimeout:    30 * time.Second,
 			FlushTimeout:    5 * time.Second,
 		},
 		Geofence: geofence.Config{
 			Hysteresis: 5,
 			Prefix:     "geofence",
+			TagTTL:     time.Hour,
 		},
 	}
 }
@@ -89,6 +91,7 @@ func LoadConfig(args []string) (*Config, error) {
 	fs.IntVar(&cfg.Port, "port", cfg.Port, "CDP UDP port")
 	fs.StringVar(&cfg.Iface, "iface", cfg.Iface, "Network interface name (optional)")
 	fs.StringVar(&cfg.Prefix, "prefix", cfg.Prefix, "NATS subject prefix")
+	fs.IntVar(&cfg.UDPReadBuffer, "udp-read-buffer", cfg.UDPReadBuffer, "UDP socket read buffer size in bytes (kernel may cap at net.core.rmem_max)")
 
 	// Logger
 	fs.StringVar(&cfg.Logger.Level, "log-level", cfg.Logger.Level, "log level: debug|info|warn|error")
@@ -97,6 +100,7 @@ func LoadConfig(args []string) (*Config, error) {
 	// scalar form are exposed via env/flags)
 	fs.StringVar(&cfg.Geofence.Prefix, "geofence-prefix", cfg.Geofence.Prefix, "NATS subject prefix for geofence events")
 	fs.IntVar(&cfg.Geofence.Hysteresis, "geofence-hysteresis", cfg.Geofence.Hysteresis, "geofence: consecutive packets a new zone state must hold before commit")
+	fs.DurationVar(&cfg.Geofence.TagTTL, "geofence-tag-ttl", cfg.Geofence.TagTTL, "geofence: drop a tag's state if no position update for this long (0 disables)")
 
 	// Broker
 	fs.StringVar(&cfg.Broker.URL, "nats-url", cfg.Broker.URL, "NATS server URL(s); comma-separated")
@@ -115,14 +119,43 @@ func LoadConfig(args []string) (*Config, error) {
 	fs.DurationVar(&cfg.Broker.ReconnectJitter, "nats-reconnect-jitter", cfg.Broker.ReconnectJitter, "NATS reconnect jitter")
 	fs.DurationVar(&cfg.Broker.PingInterval, "nats-ping-interval", cfg.Broker.PingInterval, "NATS ping interval")
 	fs.IntVar(&cfg.Broker.MaxPingsOut, "nats-max-pings-out", cfg.Broker.MaxPingsOut, "NATS max outstanding pings before disconnect")
-	fs.DurationVar(&cfg.Broker.DrainTimeout, "nats-drain-timeout", cfg.Broker.DrainTimeout, "NATS drain timeout on shutdown")
 	fs.DurationVar(&cfg.Broker.FlushTimeout, "nats-flush-timeout", cfg.Broker.FlushTimeout, "NATS flush timeout")
 	fs.BoolVar(&cfg.Broker.NoEcho, "nats-no-echo", cfg.Broker.NoEcho, "NATS NoEcho: suppress own messages")
 
 	if err := fs.Parse(args); err != nil {
 		return nil, err
 	}
+
+	if err := validateSubjectPrefix("prefix", cfg.Prefix); err != nil {
+		return nil, err
+	}
+	if err := validateSubjectPrefix("geofence.prefix", cfg.Geofence.Prefix); err != nil {
+		return nil, err
+	}
+
 	return cfg, nil
+}
+
+// validateSubjectPrefix rejects characters and structures that produce
+// invalid NATS subjects: wildcards, whitespace, and empty tokens (e.g.
+// "cdp." → produces a `cdp..foo.bar` subject with an empty middle token).
+// Empty prefix is allowed; the caller decides what default to apply.
+func validateSubjectPrefix(name, prefix string) error {
+	if prefix == "" {
+		return nil
+	}
+	for _, token := range strings.Split(prefix, ".") {
+		if token == "" {
+			return fmt.Errorf("%s: prefix %q has empty token", name, prefix)
+		}
+		for _, r := range token {
+			switch r {
+			case ' ', '\t', '\n', '\r', '*', '>':
+				return fmt.Errorf("%s: prefix %q contains illegal character %q", name, prefix, r)
+			}
+		}
+	}
+	return nil
 }
 
 // findConfigPath walks args looking for --config / -config so we can read
@@ -150,11 +183,13 @@ func applyEnv(cfg *Config) {
 	envInt(&cfg.Port, "CDP_PORT")
 	envStr(&cfg.Iface, "CDP_INTERFACE")
 	envStr(&cfg.Prefix, "CDP_NATS_PREFIX")
+	envInt(&cfg.UDPReadBuffer, "CDP_UDP_READ_BUFFER")
 
 	envStr(&cfg.Logger.Level, "LOG_LEVEL")
 
 	envStr(&cfg.Geofence.Prefix, "GEOFENCE_PREFIX")
 	envInt(&cfg.Geofence.Hysteresis, "GEOFENCE_HYSTERESIS")
+	envDur(&cfg.Geofence.TagTTL, "GEOFENCE_TAG_TTL")
 
 	envStr(&cfg.Broker.URL, "NATS_URL")
 	envStr(&cfg.Broker.Name, "NATS_NAME")
@@ -172,7 +207,6 @@ func applyEnv(cfg *Config) {
 	envDur(&cfg.Broker.ReconnectJitter, "NATS_RECONNECT_JITTER")
 	envDur(&cfg.Broker.PingInterval, "NATS_PING_INTERVAL")
 	envInt(&cfg.Broker.MaxPingsOut, "NATS_MAX_PINGS_OUT")
-	envDur(&cfg.Broker.DrainTimeout, "NATS_DRAIN_TIMEOUT")
 	envDur(&cfg.Broker.FlushTimeout, "NATS_FLUSH_TIMEOUT")
 	envBool(&cfg.Broker.NoEcho, "NATS_NO_ECHO")
 }

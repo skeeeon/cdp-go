@@ -7,6 +7,7 @@ group: 239.255.76.67
 port: 7667
 # iface: eth0
 prefix: cdp
+# udp_read_buffer: 1048576   # bytes; raise on dense networks if `netstat -su` shows RcvbufErrors. Kernel may cap at net.core.rmem_max.
 
 logger:
   level: info  # debug | info | warn | error
@@ -37,8 +38,7 @@ broker:
   reconnect_jitter: 100ms
   ping_interval: 2m
   max_pings_out: 2
-  drain_timeout: 30s
-  flush_timeout: 5s
+  flush_timeout: 5s           # blocks shutdown until pending publishes flush, or this fires
   no_echo: false
 
 # Optional: 2D polygon geofencing on PositionV3 packets. If `zones` is
@@ -57,6 +57,7 @@ broker:
 # geofence:
 #   hysteresis: 5    # consecutive packets a new zone state must hold before commit; 0|1 = immediate
 #   prefix: geofence
+#   tag_ttl: 1h      # drop a tag's per-tag state if no position update for this long; 0 disables
 #   zones:
 #     - name: Paper
 #       vertices: [[0, 0], [10000, 0], [10000, 10000], [0, 10000]]

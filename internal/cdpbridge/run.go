@@ -23,9 +23,13 @@ func Run(ctx context.Context, cfg *Config) error {
 		return err
 	}
 	defer func() {
-		if err := nc.Drain(); err != nil {
-			slog.Warn("nats drain", "err", err)
+		// FlushTimeout blocks until pending messages are sent or the
+		// timeout fires; Drain is async and inappropriate for a
+		// publish-only client.
+		if err := nc.FlushTimeout(cfg.Broker.FlushTimeout); err != nil {
+			slog.Warn("nats flush", "err", err)
 		}
+		nc.Close()
 	}()
 
 	var engine *geofence.Engine
@@ -34,15 +38,16 @@ func Run(ctx context.Context, cfg *Config) error {
 		if err != nil {
 			return fmt.Errorf("geofence: %w", err)
 		}
-		engine = geofence.NewEngine(zones, cfg.Geofence.Hysteresis,
+		engine = geofence.NewEngine(zones, cfg.Geofence.Hysteresis, cfg.Geofence.TagTTL,
 			&natsGeofenceSink{nc: nc, prefix: cfg.Geofence.Prefix})
 		slog.Info("geofence enabled",
 			"zones", len(zones),
 			"hysteresis", cfg.Geofence.Hysteresis,
+			"tag_ttl", cfg.Geofence.TagTTL,
 			"prefix", cfg.Geofence.Prefix)
 	}
 
-	packets := make(chan []byte, 256)
+	packets := make(chan []byte, 2048)
 	listenErr := make(chan error, 1)
 	go func() { listenErr <- listen(ctx, cfg, packets) }()
 

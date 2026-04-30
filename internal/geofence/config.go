@@ -2,6 +2,7 @@ package geofence
 
 import (
 	"fmt"
+	"time"
 )
 
 // Config is the geofence feature's configuration. Embed it inside a
@@ -16,6 +17,12 @@ type Config struct {
 
 	// Prefix is the NATS subject prefix for geofence events. Default "geofence".
 	Prefix string `yaml:"prefix"`
+
+	// TagTTL: drop a tag's per-tag state if no position update has
+	// arrived for this long. Zero disables the sweep. Wall-clock
+	// duration — NOT CDP NetworkTime — because NetworkTime is a UWB
+	// sync clock that resets on tag reboot.
+	TagTTL time.Duration `yaml:"tag_ttl"`
 
 	// Zones is the static list of polygons. Coordinates are int32
 	// millimeters, matching cdp.PositionV3.X/Y exactly.
@@ -44,6 +51,9 @@ func (c Config) Enabled() bool { return len(c.Zones) > 0 }
 func (c Config) Build() ([]*Zone, error) {
 	if c.Hysteresis < 0 {
 		return nil, fmt.Errorf("geofence: hysteresis must be >= 0, got %d", c.Hysteresis)
+	}
+	if c.TagTTL < 0 {
+		return nil, fmt.Errorf("geofence: tag_ttl must be >= 0, got %s", c.TagTTL)
 	}
 	zones := make([]*Zone, 0, len(c.Zones))
 	seenSlug := make(map[string]string, len(c.Zones))

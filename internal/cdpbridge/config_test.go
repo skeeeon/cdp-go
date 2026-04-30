@@ -151,14 +151,15 @@ func clearEnv(t *testing.T) {
 	t.Helper()
 	for _, k := range []string{
 		"CDP_GROUP", "CDP_PORT", "CDP_INTERFACE", "CDP_NATS_PREFIX",
+		"CDP_UDP_READ_BUFFER",
 		"LOG_LEVEL", "CONFIG_FILE",
-		"GEOFENCE_PREFIX", "GEOFENCE_HYSTERESIS",
+		"GEOFENCE_PREFIX", "GEOFENCE_HYSTERESIS", "GEOFENCE_TAG_TTL",
 		"NATS_URL", "NATS_NAME", "NATS_USER", "NATS_PASSWORD", "NATS_TOKEN",
 		"NATS_CREDS_FILE", "NATS_NKEY_SEED_FILE",
 		"NATS_TLS_CA", "NATS_TLS_CERT", "NATS_TLS_KEY", "NATS_TLS_INSECURE",
 		"NATS_MAX_RECONNECTS", "NATS_RECONNECT_WAIT", "NATS_RECONNECT_JITTER",
 		"NATS_PING_INTERVAL", "NATS_MAX_PINGS_OUT",
-		"NATS_DRAIN_TIMEOUT", "NATS_FLUSH_TIMEOUT", "NATS_NO_ECHO",
+		"NATS_FLUSH_TIMEOUT", "NATS_NO_ECHO",
 	} {
 		if _, ok := os.LookupEnv(k); ok {
 			t.Setenv(k, "")
@@ -181,6 +182,12 @@ func TestLoadConfigGeofenceDefaultsDisabled(t *testing.T) {
 	}
 	if cfg.Geofence.Hysteresis != 5 {
 		t.Errorf("geofence.hysteresis default: %d", cfg.Geofence.Hysteresis)
+	}
+	if cfg.Geofence.TagTTL != time.Hour {
+		t.Errorf("geofence.tag_ttl default: %s", cfg.Geofence.TagTTL)
+	}
+	if cfg.UDPReadBuffer != 1<<20 {
+		t.Errorf("udp_read_buffer default: %d", cfg.UDPReadBuffer)
 	}
 }
 
@@ -220,6 +227,39 @@ geofence:
 	}
 	if zones[0].Name != "Paper" || zones[1].Name != "Shipping" {
 		t.Errorf("zone names: got %q, %q", zones[0].Name, zones[1].Name)
+	}
+}
+
+func TestValidateSubjectPrefix(t *testing.T) {
+	good := []string{"", "cdp", "cdp.subdomain", "a.b.c"}
+	for _, p := range good {
+		if err := validateSubjectPrefix("test", p); err != nil {
+			t.Errorf("expected %q to pass, got: %v", p, err)
+		}
+	}
+	bad := []string{
+		"cdp.*.foo",
+		"cdp.>.foo",
+		"cdp foo",
+		"cdp\tfoo",
+		"cdp.",
+		".cdp",
+		"cdp..foo",
+	}
+	for _, p := range bad {
+		if err := validateSubjectPrefix("test", p); err == nil {
+			t.Errorf("expected %q to fail validation, got nil", p)
+		}
+	}
+}
+
+func TestLoadConfigRejectsInvalidPrefix(t *testing.T) {
+	clearEnv(t)
+	if _, err := LoadConfig([]string{"--prefix", "cdp.*.foo"}); err == nil {
+		t.Error("expected --prefix with wildcard to fail")
+	}
+	if _, err := LoadConfig([]string{"--geofence-prefix", "geo .bad"}); err == nil {
+		t.Error("expected --geofence-prefix with whitespace to fail")
 	}
 }
 

@@ -35,8 +35,10 @@ func listen(ctx context.Context, cfg *Config, out chan<- []byte) error {
 	}
 	defer conn.Close()
 
-	if err := conn.SetReadBuffer(1 << 20); err != nil {
-		slog.Warn("listener: SetReadBuffer", "err", err)
+	if cfg.UDPReadBuffer > 0 {
+		if err := conn.SetReadBuffer(cfg.UDPReadBuffer); err != nil {
+			slog.Warn("listener: SetReadBuffer", "size", cfg.UDPReadBuffer, "err", err)
+		}
 	}
 
 	slog.Info("listening", "group", cfg.Group, "port", cfg.Port, "iface", cfg.Iface)
