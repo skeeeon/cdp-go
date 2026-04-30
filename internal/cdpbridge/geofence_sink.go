@@ -10,7 +10,7 @@ import (
 
 // natsGeofenceSink publishes one NATS message per geofence event.
 //
-// Subject: <prefix>.tag.<event_type>.<tag_serial_hex8>.<zone_slug>
+// Subject: <prefix>.<event_type>.<tag_serial_hex8>.<zone_slug>
 // Body:    JSON-marshaled geofence.Event
 type natsGeofenceSink struct {
 	nc     *nats.Conn
@@ -18,7 +18,7 @@ type natsGeofenceSink struct {
 }
 
 func (s *natsGeofenceSink) Emit(ev geofence.Event) error {
-	subj := fmt.Sprintf("%s.tag.%s.%s.%s", s.prefix, ev.Type, ev.TagHex, ev.ZoneSlug)
+	subj := fmt.Sprintf("%s.%s.%s.%s", s.prefix, ev.Type, ev.Tag.Hex(), ev.ZoneSlug)
 	body, err := json.Marshal(ev)
 	if err != nil {
 		return err

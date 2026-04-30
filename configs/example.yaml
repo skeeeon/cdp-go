@@ -50,7 +50,7 @@ broker:
 # standardizes on integer mm to eliminate float-comparison foot-guns.)
 #
 # Output: one NATS message per zone enter/exit on subject
-#   <prefix>.tag.<enter|exit>.<tag_serial_hex8>.<zone_slug>
+#   <prefix>.<enter|exit>.<tag_serial_hex8>.<zone_slug>
 # where zone_slug is the lowercased name with NATS-illegal characters
 # (`.`, `>`, `*`, whitespace) replaced by underscores.
 #

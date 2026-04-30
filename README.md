@@ -163,7 +163,7 @@ proposed state has to be *stable*, not just different. `hysteresis: 0` and
 ### NATS subjects
 
 ```
-<prefix>.tag.<event_type>.<tag_serial_hex8>.<zone_slug>
+<prefix>.<event_type>.<tag_serial_hex8>.<zone_slug>
 ```
 
 - `prefix` defaults to `geofence` (override via `--geofence-prefix` / `GEOFENCE_PREFIX`)
@@ -175,10 +175,10 @@ proposed state has to be *stable*, not just different. `hysteresis: 0` and
 Useful wildcards:
 
 ```
-geofence.tag.>                       # all geofence events
-geofence.tag.enter.>                 # all enters
-geofence.tag.*.*.paper               # all transitions touching the "paper" zone
-geofence.tag.*.01020304.>            # all transitions for one tag
+geofence.>                       # all geofence events
+geofence.enter.>                 # all enters
+geofence.*.*.paper               # all transitions touching the "paper" zone
+geofence.*.01020304.>            # all transitions for one tag
 ```
 
 ### Geofence event JSON
@@ -266,7 +266,7 @@ go test ./...
 Watch the live feeds:
 ```bash
 nats sub "cdp.>"           # decoded data items
-nats sub "geofence.tag.>"  # zone enter/exit events (when geofencing is enabled)
+nats sub "geofence.>"      # zone enter/exit events (when geofencing is enabled)
 ```
 
 ## License

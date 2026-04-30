@@ -288,9 +288,6 @@ func TestEngineEventCarriesPositionAndColor(t *testing.T) {
 	if ev.Tag != tag {
 		t.Errorf("tag: got %v, want %v", ev.Tag, tag)
 	}
-	if ev.TagHex != "01020304" {
-		t.Errorf("tag_hex: got %q, want 01020304", ev.TagHex)
-	}
 	if ev.Color != (RGB{255, 0, 0}) {
 		t.Errorf("color: got %v, want {255 0 0}", ev.Color)
 	}

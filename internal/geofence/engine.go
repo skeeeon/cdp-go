@@ -116,14 +116,12 @@ func (e *Engine) emit(serial cdp.Serial, pos *cdp.PositionV3, prev, next ZoneSet
 	exits, enters := diffZoneSets(prev, next)
 
 	point := Point{X: pos.X, Y: pos.Y}
-	tagHex := serial.Hex()
 	inZones := append([]string(nil), next...) // defensive copy for the event payload
 
 	for _, name := range exits {
 		ev := Event{
 			Type:        EventExit,
 			Tag:         serial,
-			TagHex:      tagHex,
 			Zone:        name,
 			ZoneSlug:    e.slugOf(name),
 			InZones:     inZones,
@@ -139,7 +137,6 @@ func (e *Engine) emit(serial cdp.Serial, pos *cdp.PositionV3, prev, next ZoneSet
 		ev := Event{
 			Type:        EventEnter,
 			Tag:         serial,
-			TagHex:      tagHex,
 			Zone:        name,
 			ZoneSlug:    e.slugOf(name),
 			InZones:     inZones,

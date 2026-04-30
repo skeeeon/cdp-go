@@ -25,7 +25,6 @@ const (
 type Event struct {
 	Type        EventType  `json:"type"`
 	Tag         cdp.Serial `json:"tag"`
-	TagHex      string     `json:"-"`
 	Zone        string     `json:"zone"`
 	ZoneSlug    string     `json:"-"`
 	InZones     []string   `json:"in_zones"`

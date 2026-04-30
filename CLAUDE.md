@@ -64,7 +64,7 @@ Boundary behavior: points exactly on a polygon edge or vertex are reported as in
 
 Coordinate range: int32 millimeters throughout. Realistic UWB scenarios (≤ ±10⁸ mm = 100 km) are well within the int64-product safety bound; vertices at int32 extremes could overflow the cross-multiply but no real config gets close.
 
-Subject construction: `<prefix>.tag.<event_type>.<tag_serial_hex8>.<zone_slug>`. `zone_slug` comes from `slugifyZoneName()` (lowercase, NATS-illegal characters → `_`). Constructed in `internal/cdpbridge/geofence_sink.go`, not in the geofence package itself.
+Subject construction: `<prefix>.<event_type>.<tag_serial_hex8>.<zone_slug>`. `zone_slug` comes from `slugifyZoneName()` (lowercase, NATS-illegal characters → `_`). Constructed in `internal/cdpbridge/geofence_sink.go`, not in the geofence package itself.
 
 ## Config resolution
 
@@ -74,6 +74,6 @@ Priority (lowest → highest): defaults → YAML (`--config` / `CONFIG_FILE`) �
 
 **Per-item bridge output** (always on): `<prefix>.<subject_token>.<sender_serial_hex8>` where `sender_serial_hex8` is 8 lowercase hex chars with no colons (NATS subjects forbid them — `Serial.Hex()` produces this; `Serial.String()` produces the colon-separated display form `XX:XX:XXXX`). Body: `envelope` struct in `internal/cdpbridge/publish.go`: `{type, type_name, packet:{sequence, sender_serial}, data:<typed payload>}`. `type` carries the original CDP type ID with version (e.g. `0x0135`) so consumers can disambiguate items whose subject token had the version suffix stripped.
 
-**Geofence events** (only when `cfg.Geofence.Enabled()`): `<geofence_prefix>.tag.<enter|exit>.<tag_serial_hex8>.<zone_slug>`. Body: `geofence.Event` JSON. The geofence stream is independent from and parallel to the per-item bridge stream — both run from the same `publish()` call site.
+**Geofence events** (only when `cfg.Geofence.Enabled()`): `<geofence_prefix>.<enter|exit>.<tag_serial_hex8>.<zone_slug>`. Body: `geofence.Event` JSON. The geofence stream is independent from and parallel to the per-item bridge stream — both run from the same `publish()` call site.
 
 Per-datagram decode errors abort that datagram; per-item publish errors are logged and the loop continues with remaining items.
