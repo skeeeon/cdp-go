@@ -1,10 +1,10 @@
 package cdpbridge
 
 import (
-	"encoding/json"
 	"fmt"
 	"log/slog"
 
+	json "github.com/goccy/go-json"
 	"github.com/nats-io/nats.go"
 	"github.com/velociti/cdp-go/internal/geofence"
 	"github.com/velociti/cdp-go/pkg/cdp"
