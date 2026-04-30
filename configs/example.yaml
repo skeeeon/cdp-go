@@ -1,0 +1,42 @@
+# cdp-nats-bridge example configuration.
+# All keys are optional; anything omitted falls back to the built-in default.
+# Env vars and command-line flags override values set here.
+
+# CDP listener
+group: 239.255.76.67
+port: 7667
+# iface: eth0
+prefix: cdp
+
+logger:
+  level: info  # debug | info | warn | error
+
+broker:
+  url: nats://localhost:4222
+  name: cdp-nats-bridge
+
+  # --- Auth (uncomment ONE of the following sets) ---
+  # user: alice
+  # password: secret
+  #
+  # token: s3cret-token
+  #
+  # creds_file: /etc/nats/cdp.creds
+  #
+  # nkey_seed_file: /etc/nats/cdp.nk
+
+  # --- TLS (only when url uses tls://) ---
+  # tls_ca: /etc/nats/ca.pem
+  # tls_cert: /etc/nats/client.pem
+  # tls_key: /etc/nats/client.key
+  # tls_insecure: false
+
+  # --- Reconnect tuning ---
+  max_reconnects: -1          # -1 = forever
+  reconnect_wait: 2s
+  reconnect_jitter: 100ms
+  ping_interval: 2m
+  max_pings_out: 2
+  drain_timeout: 30s
+  flush_timeout: 5s
+  no_echo: false

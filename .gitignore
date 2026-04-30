@@ -1,0 +1,15 @@
+# Build output
+/cdp-nats-bridge
+/cdp-nats-bridge.exe
+/dist/
+
+# Local config overrides
+.env
+.env.*
+config.yaml
+config.yml
+!configs/example.yaml
+
+# Editor scratch
+.vscode/
+.idea/
