@@ -31,6 +31,18 @@ type Config struct {
 	// entirely; the engine isn't constructed and no geofence code runs
 	// in the per-packet path.
 	Geofence geofence.Config `yaml:"geofence"`
+
+	// Metrics is optional. An empty Addr disables the Prometheus HTTP
+	// endpoint; counter increments on the publish path are unconditional
+	// and effectively free, so cumulative rates remain accurate when the
+	// endpoint is later turned on.
+	Metrics MetricsConfig `yaml:"metrics"`
+}
+
+// MetricsConfig configures the Prometheus /metrics HTTP endpoint.
+type MetricsConfig struct {
+	// Addr is the listen address (e.g. ":9090"). Empty disables the endpoint.
+	Addr string `yaml:"addr"`
 }
 
 // defaults seeds a Config with the same values flags would otherwise use.
@@ -101,6 +113,9 @@ func LoadConfig(args []string) (*Config, error) {
 	fs.StringVar(&cfg.Geofence.Prefix, "geofence-prefix", cfg.Geofence.Prefix, "NATS subject prefix for geofence events")
 	fs.IntVar(&cfg.Geofence.Hysteresis, "geofence-hysteresis", cfg.Geofence.Hysteresis, "geofence: consecutive packets a new zone state must hold before commit")
 	fs.DurationVar(&cfg.Geofence.TagTTL, "geofence-tag-ttl", cfg.Geofence.TagTTL, "geofence: drop a tag's state if no position update for this long (0 disables)")
+
+	// Metrics
+	fs.StringVar(&cfg.Metrics.Addr, "metrics-addr", cfg.Metrics.Addr, "Prometheus /metrics HTTP listen address (e.g. :9090); empty disables")
 
 	// Broker
 	fs.StringVar(&cfg.Broker.URL, "nats-url", cfg.Broker.URL, "NATS server URL(s); comma-separated")
@@ -190,6 +205,8 @@ func applyEnv(cfg *Config) {
 	envStr(&cfg.Geofence.Prefix, "GEOFENCE_PREFIX")
 	envInt(&cfg.Geofence.Hysteresis, "GEOFENCE_HYSTERESIS")
 	envDur(&cfg.Geofence.TagTTL, "GEOFENCE_TAG_TTL")
+
+	envStr(&cfg.Metrics.Addr, "METRICS_ADDR")
 
 	envStr(&cfg.Broker.URL, "NATS_URL")
 	envStr(&cfg.Broker.Name, "NATS_NAME")

@@ -6,6 +6,7 @@ import (
 	json "github.com/goccy/go-json"
 	"github.com/nats-io/nats.go"
 	"github.com/skeeeon/cdp-go/internal/geofence"
+	"github.com/skeeeon/cdp-go/internal/metrics"
 )
 
 // natsGeofenceSink publishes one NATS message per geofence event.
@@ -28,14 +29,18 @@ func (s *natsGeofenceSink) Emit(ev geofence.Event) error {
 	subj := fmt.Sprintf("%s.%s.%s.%s", s.prefix, ev.Type, ev.Tag.Hex(), ev.ZoneSlug)
 	body, err := json.Marshal(ev)
 	if err != nil {
+		metrics.PublishErrors.Inc()
 		return err
 	}
 	if err := s.nc.Publish(subj, body); err != nil {
+		metrics.PublishErrors.Inc()
 		if s.nc.Status() == nats.CONNECTED {
 			return err
 		}
 		// Disconnected: drop quietly. The broker logs disconnect
 		// state changes; flooding warns per packet adds no signal.
+		return nil
 	}
+	metrics.GeofenceEvents.WithLabelValues(string(ev.Type)).Inc()
 	return nil
 }

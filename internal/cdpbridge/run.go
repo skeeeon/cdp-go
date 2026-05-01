@@ -8,8 +8,10 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/nats-io/nats.go"
 	"github.com/skeeeon/cdp-go/internal/broker"
 	"github.com/skeeeon/cdp-go/internal/geofence"
+	"github.com/skeeeon/cdp-go/internal/metrics"
 )
 
 // Run is the bridge orchestrator. It dials NATS, listens on the multicast
@@ -50,6 +52,26 @@ func Run(ctx context.Context, cfg *Config) error {
 	packets := make(chan []byte, 2048)
 	listenErr := make(chan error, 1)
 	go func() { listenErr <- listen(ctx, cfg, packets) }()
+
+	if cfg.Metrics.Addr != "" {
+		var tagCount func() int
+		if engine != nil {
+			tagCount = engine.TagCount
+		}
+		go metrics.PollGauges(ctx,
+			func() int { return len(packets) },
+			tagCount,
+			func() bool { return nc.Status() == nats.CONNECTED },
+		)
+		go func() {
+			if err := metrics.Serve(ctx, cfg.Metrics.Addr); err != nil {
+				// Metrics failure is non-fatal: the bridge keeps
+				// pumping CDP→NATS even if the scrape endpoint is dead.
+				slog.Error("metrics server", "addr", cfg.Metrics.Addr, "err", err)
+			}
+		}()
+		slog.Info("metrics endpoint", "addr", cfg.Metrics.Addr, "path", "/metrics")
+	}
 
 	for {
 		select {

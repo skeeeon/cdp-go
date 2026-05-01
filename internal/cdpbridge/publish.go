@@ -7,6 +7,7 @@ import (
 	json "github.com/goccy/go-json"
 	"github.com/nats-io/nats.go"
 	"github.com/skeeeon/cdp-go/internal/geofence"
+	"github.com/skeeeon/cdp-go/internal/metrics"
 	"github.com/skeeeon/cdp-go/pkg/cdp"
 )
 
@@ -30,8 +31,10 @@ type envelopePacket struct {
 // Decode errors are returned (per-datagram failure); per-item publish errors
 // are logged but do not abort the rest of the items in the same datagram.
 func publish(nc *nats.Conn, prefix string, data []byte, engine *geofence.Engine) error {
+	metrics.DatagramsReceived.Inc()
 	pkt, err := cdp.Decode(data)
 	if err != nil {
+		metrics.DecodeErrors.Inc()
 		return fmt.Errorf("decode: %w", err)
 	}
 
@@ -48,10 +51,12 @@ func publish(nc *nats.Conn, prefix string, data []byte, engine *geofence.Engine)
 			Data: it.Payload,
 		})
 		if err != nil {
+			metrics.PublishErrors.Inc()
 			slog.Warn("marshal", "subject", subj, "err", err)
 			continue
 		}
 		if err := nc.Publish(subj, body); err != nil {
+			metrics.PublishErrors.Inc()
 			// Demote to debug when we already know NATS is down — the
 			// broker's DisconnectErrHandler/ReconnectHandler logs
 			// already carry the operational signal, so per-publish
@@ -61,6 +66,8 @@ func publish(nc *nats.Conn, prefix string, data []byte, engine *geofence.Engine)
 			} else {
 				slog.Debug("publish (disconnected)", "subject", subj, "err", err)
 			}
+		} else {
+			metrics.ItemsPublished.Inc()
 		}
 
 		if engine != nil {
