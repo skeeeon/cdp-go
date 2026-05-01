@@ -34,6 +34,12 @@ through as a fallback `Unknown` containing the raw payload bytes.
 
 | Type ID | Struct | Subject token |
 |---|---|---|
+| 0x010D | NodeStatusChangeV2 | `node_status_change` |
+| 0x011A | CDPStreamInformation | `cdp_stream_information` |
+| 0x011B | HostnameAnnounce | `hostname_announce` |
+| 0x011C | InstanceAnnounce | `instance_announce` |
+| 0x0121 | AppSettingsChunk | `app_settings_chunk` |
+| 0x0127 | DistanceV2 | `distance` |
 | 0x0135 | PositionV3 | `position` |
 | 0x0136 | AnchorPositionStatusV3 | `anchor_position_status` |
 | 0x0137 | DeviceActivityState | `device_activity_state` |
@@ -50,11 +56,39 @@ through as a fallback `Unknown` containing the raw payload bytes.
 | 0x0148 | UserDefinedV2 | `user_defined` |
 | 0x0149 | NetworkTime | `network_time` |
 | 0x014A | AnchorHealthV5 | `anchor_health` |
+| 0x014C | GlobalPingTimingReportV1 | `global_ping_timing_report` |
 | 0x015A | NtRealTimeMappingV1 | `nt_realtime_mapping` |
 | 0x0160 | BootloadProgress | `bootload_progress` |
+| 0x0161 | AnchorPositionStatusV4 | `anchor_position_status` |
+| 0x0163 | LinkMDStatus | `link_md_status` |
 | 0x0164 | PolarCoordinatesV1 | `polar_coordinates` |
+| 0x016A | BoundingBoxReport | `bounding_box_report` |
+| 0x016B | BoundingCylinderReport | `bounding_cylinder_report` |
 | 0x0171 | ImageDiscoveryV2 | `image_discovery` |
+| 0x0178 | QuaternionV3 | `quaternion` |
+| 0x0179 | UserDefinedV3 | `user_defined` |
+| 0x017A | AccelerometerV3 | `accelerometer` |
+| 0x017B | GyroscopeV3 | `gyroscope` |
+| 0x017C | MagnetometerV3 | `magnetometer` |
+| 0x8009 | ImageDiscoveryV1 | `image_discovery` |
+| 0x802C | TimedRxV5 | `timed_rx` |
+| 0x802D | TickV4 | `tick` |
+| 0x802F | PingV5 | `ping` |
+| 0x80B2 | TickV5 | `tick` |
+| 0x80B3 | TimedRxV6 | `timed_rx` |
+| 0x80C0 | DeviceColor | `device_color` |
+| 0x80D4 | DeviceStatusV3 | `device_status` |
+| 0x80DA | ClearDeviceColor | `clear_device_color` |
+| 0x80DB | GeofencerZoneInfo | `geofencer_zone_info` |
+| 0x80DC | TagZoneInfo | `tag_zone_info` |
+| 0x80DD | DrawPrism | `draw_prism` |
+| 0x80DE | ClearObject | `clear_object` |
 | (other) | Unknown | `unknown_<typeid_hex4>` |
+
+Multiple type IDs may share the same subject token (e.g. `quaternion` is
+used by 0x013D, 0x0178; `tick` by 0x802D, 0x80B2). Consumers can
+disambiguate via the `type` field in the JSON envelope, which carries
+the original 4-digit hex type ID.
 
 Adding a new type: append a struct + decoder in `pkg/cdp/items.go` and register
 it in the `init()` function at the top of that file.
