@@ -57,9 +57,12 @@ func (s Serial) MarshalJSON() ([]byte, error) {
 // Item is one decoded data item from a packet.
 //
 // Payload is a pointer to the typed struct registered for TypeID (e.g.
-// *PositionV3), or *Unknown if no decoder is registered.
+// *PositionV3), or *Unknown if no decoder is registered. TypeHex is the
+// "0xNNNN" string form of TypeID, precomputed so per-item publishers can
+// avoid Sprintf on the hot path.
 type Item struct {
 	TypeID  uint16
+	TypeHex string
 	Name    string
 	Subject string
 	Payload any
@@ -83,6 +86,12 @@ type registryEntry struct {
 // once at package init from the table in items.go.
 var registry = map[uint16]registryEntry{}
 
+// typeHexes caches the "0xNNNN" string form for every registered type ID,
+// populated in init() after the registry table is built. Decode reads
+// these to avoid an Sprintf per known item on the hot path. Unknown
+// (unregistered) types fall through to fmt.Sprintf in unknownTypeHex.
+var typeHexes = map[uint16]string{}
+
 // Decode parses a single CDP UDP datagram.
 //
 // Returns an error for an unrecognized marker, an unrecognized header
@@ -98,15 +107,23 @@ func Decode(buf []byte) (*Packet, error) {
 		return nil, fmt.Errorf("cdp: bad marker 0x%08X", marker)
 	}
 
-	pkt := &Packet{
-		Sequence: binary.LittleEndian.Uint32(buf[4:8]),
-		Sender:   Serial(binary.LittleEndian.Uint32(buf[16:20])),
-	}
-
 	var str [8]byte
 	copy(str[:], buf[8:16])
 	if str != stringCDP0002 && str != stringLCMSelf {
 		return nil, fmt.Errorf("cdp: bad header string %q", str[:])
+	}
+
+	// Cap is the upper bound on items (a zero-payload item is the smallest
+	// possible), clamped to a sensible ceiling so a pathological packet
+	// can't allocate a huge slice up front.
+	itemsCap := (len(buf) - HeaderSize) / DataItemHeaderSize
+	if itemsCap > 32 {
+		itemsCap = 32
+	}
+	pkt := &Packet{
+		Sequence: binary.LittleEndian.Uint32(buf[4:8]),
+		Sender:   Serial(binary.LittleEndian.Uint32(buf[16:20])),
+		Items:    make([]Item, 0, itemsCap),
 	}
 
 	idx := HeaderSize
@@ -126,6 +143,7 @@ func Decode(buf []byte) (*Packet, error) {
 		if !ok {
 			pkt.Items = append(pkt.Items, Item{
 				TypeID:  typeID,
+				TypeHex: unknownTypeHex(typeID),
 				Name:    unknownName(typeID),
 				Subject: unknownSubject(typeID),
 				Payload: &Unknown{TypeID: typeID, Raw: append([]byte(nil), payload...)},
@@ -139,6 +157,7 @@ func Decode(buf []byte) (*Packet, error) {
 		}
 		pkt.Items = append(pkt.Items, Item{
 			TypeID:  typeID,
+			TypeHex: typeHexes[typeID],
 			Name:    entry.name,
 			Subject: entry.subject,
 			Payload: decoded,

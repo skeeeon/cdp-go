@@ -35,10 +35,11 @@ func publish(nc *nats.Conn, prefix string, data []byte, engine *geofence.Engine)
 		return fmt.Errorf("decode: %w", err)
 	}
 
+	senderHex := pkt.Sender.Hex()
 	for _, it := range pkt.Items {
-		subj := fmt.Sprintf("%s.%s.%s", prefix, it.Subject, pkt.Sender.Hex())
+		subj := fmt.Sprintf("%s.%s.%s", prefix, it.Subject, senderHex)
 		body, err := json.Marshal(envelope{
-			Type:     fmt.Sprintf("0x%04X", it.TypeID),
+			Type:     it.TypeHex,
 			TypeName: it.Name,
 			Packet: envelopePacket{
 				Sequence:     pkt.Sequence,

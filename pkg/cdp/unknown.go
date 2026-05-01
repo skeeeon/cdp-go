@@ -32,3 +32,7 @@ func unknownName(typeID uint16) string {
 func unknownSubject(typeID uint16) string {
 	return fmt.Sprintf("unknown_%04x", typeID)
 }
+
+func unknownTypeHex(typeID uint16) string {
+	return fmt.Sprintf("0x%04X", typeID)
+}

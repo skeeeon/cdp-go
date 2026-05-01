@@ -26,6 +26,13 @@ func init() {
 	registry[0x0160] = registryEntry{"BootloadProgress", "bootload_progress", decodeBootloadProgress}
 	registry[0x0164] = registryEntry{"PolarCoordinatesV1", "polar_coordinates", decodePolarCoordinatesV1}
 	registry[0x0171] = registryEntry{"ImageDiscoveryV2", "image_discovery", decodeImageDiscoveryV2}
+
+	// Precompute the "0xNNNN" string form once per registered type so
+	// per-item publishers can read it off Item.TypeHex without an Sprintf
+	// on the hot path.
+	for tid := range registry {
+		typeHexes[tid] = fmt.Sprintf("0x%04X", tid)
+	}
 }
 
 // ---- Shared sub-structures ------------------------------------------------
