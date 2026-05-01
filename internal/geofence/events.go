@@ -7,7 +7,7 @@
 // any other transport) is the caller's responsibility.
 package geofence
 
-import "github.com/velociti/cdp-go/pkg/cdp"
+import "github.com/skeeeon/cdp-go/pkg/cdp"
 
 // EventType is the kind of zone-membership transition that produced an Event.
 type EventType string

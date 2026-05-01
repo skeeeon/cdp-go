@@ -6,8 +6,8 @@ import (
 
 	json "github.com/goccy/go-json"
 	"github.com/nats-io/nats.go"
-	"github.com/velociti/cdp-go/internal/geofence"
-	"github.com/velociti/cdp-go/pkg/cdp"
+	"github.com/skeeeon/cdp-go/internal/geofence"
+	"github.com/skeeeon/cdp-go/pkg/cdp"
 )
 
 // envelope is the JSON object published per data item.

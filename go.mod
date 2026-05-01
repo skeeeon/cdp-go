@@ -1,4 +1,4 @@
-module github.com/velociti/cdp-go
+module github.com/skeeeon/cdp-go
 
 go 1.25.0
 

@@ -9,7 +9,7 @@ import (
 	"log/slog"
 
 	"github.com/nats-io/nats.go"
-	"github.com/velociti/cdp-go/internal/config"
+	"github.com/skeeeon/cdp-go/internal/config"
 )
 
 // Connect builds the nats.Option list from cfg and dials the server.

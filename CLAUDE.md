@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A Go port of the Ciholas Data Protocol (CDP) parser plus a UDP-multicast → NATS bridge binary, with optional 2D polygon geofencing on `PositionV3` updates. CDP is a little-endian UDP wire format from Ciholas RTLS hardware: a 20-byte header followed by zero or more `(type, size, payload)` data items. Reference Python implementations live at `../cdp-py` (parser) and `../cdp-geofencing` (geofencing).
 
-Module path: `github.com/velociti/cdp-go` (Go 1.24).
+Module path: `github.com/skeeeon/cdp-go` (Go 1.25).
 
 ## Commands
 

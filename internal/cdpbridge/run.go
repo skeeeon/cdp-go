@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/velociti/cdp-go/internal/broker"
-	"github.com/velociti/cdp-go/internal/geofence"
+	"github.com/skeeeon/cdp-go/internal/broker"
+	"github.com/skeeeon/cdp-go/internal/geofence"
 )
 
 // Run is the bridge orchestrator. It dials NATS, listens on the multicast

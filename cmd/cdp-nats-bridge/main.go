@@ -13,8 +13,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/velociti/cdp-go/internal/cdpbridge"
-	"github.com/velociti/cdp-go/internal/logger"
+	"github.com/skeeeon/cdp-go/internal/cdpbridge"
+	"github.com/skeeeon/cdp-go/internal/logger"
 )
 
 func main() {

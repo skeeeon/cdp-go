@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/velociti/cdp-go/internal/geofence"
-	"github.com/velociti/cdp-go/pkg/cdp"
+	"github.com/skeeeon/cdp-go/internal/geofence"
+	"github.com/skeeeon/cdp-go/pkg/cdp"
 )
 
 func TestNatsGeofenceSink_Emit(t *testing.T) {

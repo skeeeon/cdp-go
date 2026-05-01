@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/velociti/cdp-go/internal/config"
+	"github.com/skeeeon/cdp-go/internal/config"
 )
 
 // Setup installs a JSON slog handler on stderr at the configured level

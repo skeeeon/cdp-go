@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/velociti/cdp-go/pkg/cdp"
+	"github.com/skeeeon/cdp-go/pkg/cdp"
 )
 
 // recordingSink captures every emitted event, in order. Used by every

@@ -5,7 +5,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/velociti/cdp-go/pkg/cdp"
+	"github.com/skeeeon/cdp-go/pkg/cdp"
 )
 
 // ZoneSet is a stable comparable representation of "which zones contain

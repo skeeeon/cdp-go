@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/velociti/cdp-go/internal/config"
-	"github.com/velociti/cdp-go/internal/geofence"
+	"github.com/skeeeon/cdp-go/internal/config"
+	"github.com/skeeeon/cdp-go/internal/geofence"
 )
 
 // Config is the cdp-nats-bridge binary's full configuration.

@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	goccyjson "github.com/goccy/go-json"
-	"github.com/velociti/cdp-go/internal/geofence"
-	"github.com/velociti/cdp-go/pkg/cdp"
+	"github.com/skeeeon/cdp-go/internal/geofence"
+	"github.com/skeeeon/cdp-go/pkg/cdp"
 )
 
 // jsonSink defeats dead-code elimination in the benchmark loops.
